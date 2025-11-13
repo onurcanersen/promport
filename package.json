@@ -17,5 +17,8 @@
   "bugs": {
     "url": "https://github.com/onurcanersen/promport/issues"
   },
-  "homepage": "https://github.com/onurcanersen/promport#readme"
+  "homepage": "https://github.com/onurcanersen/promport#readme",
+  "dependencies": {
+    "express": "^5.1.0"
+  }
 }
