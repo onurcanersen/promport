@@ -50,6 +50,26 @@ app.post("/api/export", async (req, res) => {
   }
 });
 
+app.post('/api/import', async (req, res) => {
+  const { inputPath } = req.body;
+
+  if (!inputPath) {
+    return res.status(400).json({ error: "Input path is required" });
+  }
+
+  try {
+    const command = `"${PROMTOOL_PATH}" tsdb create-blocks-from openmetrics "${inputPath}" "${TSDB_PATH}"`;
+    await execAsync(command, { maxBuffer: 1024 * 1024 * 100 });
+    
+    res.json({ 
+      success: true, 
+      message: "Import completed successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`PromPort running on http://localhost:${PORT}`);
 });
