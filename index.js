@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require("express");
+const path = require("path");
 const { exec } = require("child_process");
 const { promisify } = require("util");
 
@@ -13,6 +14,7 @@ const execAsync = promisify(exec);
 const app = express();
 
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/api/metrics", async (req, res) => {
   try {
@@ -63,7 +65,7 @@ app.post("/api/export", async (req, res) => {
 
     if (selectedMetrics && selectedMetrics.length > 0) {
       const matchPattern = selectedMetrics.join("|");
-      command += ` --match "${matchPattern}"`;
+      command += ` --match '{__name__=~"${matchPattern}"}'`;
     }
 
     command += ` "${TSDB_PATH}" > "${outputPath}"`;
