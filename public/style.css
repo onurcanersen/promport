@@ -387,6 +387,8 @@ input:hover {
   border-left: 3px solid;
   max-width: 100%;
   order: -1;
+  white-space: pre-line;
+  line-height: 1.6;
 }
 
 .alert-container {

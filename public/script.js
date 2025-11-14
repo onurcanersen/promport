@@ -143,14 +143,14 @@ async function exportMetrics() {
     if (data.success) {
       showAlert(
         "export-alert",
-        `✅ ${data.message}\nFile: ${data.outputPath}`,
+        `${data.message}\nFile saved to: ${data.outputPath}`,
         "success"
       );
     } else {
       throw new Error(data.error || "Export failed");
     }
   } catch (error) {
-    showAlert("export-alert", `❌ Export failed: ${error.message}`, "error");
+    showAlert("export-alert", `Export failed: ${error.message}`, "error");
   }
 }
 
@@ -174,13 +174,17 @@ async function importMetrics() {
     const data = await response.json();
 
     if (data.success) {
-      showAlert("import-alert", `✅ ${data.message}`, "success");
+      showAlert(
+        "import-alert",
+        `${data.message}\nMetrics have been imported successfully.`,
+        "success"
+      );
       document.getElementById("input-path").value = "";
     } else {
       throw new Error(data.error || "Import failed");
     }
   } catch (error) {
-    showAlert("import-alert", `❌ Import failed: ${error.message}`, "error");
+    showAlert("import-alert", `Import failed: ${error.message}`, "error");
   }
 }
 

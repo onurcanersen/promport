@@ -78,7 +78,7 @@ app.post("/api/export", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Export completed successfully",
+      message: `✓ Export completed successfully - ${selectedMetrics.length} metric(s) exported`,
       outputPath,
     });
   } catch (error) {
@@ -99,7 +99,7 @@ app.post("/api/import", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Import completed successfully",
+      message: "✓ Import completed successfully",
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
