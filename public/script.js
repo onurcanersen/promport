@@ -29,28 +29,49 @@ async function loadMetrics() {
 
   try {
     const response = await fetch(`${API_BASE}/metrics`);
+
+    if (!response.ok) {
+      const errorData = await response
+        .json()
+        .catch(() => ({ error: "Unknown error" }));
+      throw new Error(
+        errorData.error || `HTTP ${response.status}: ${response.statusText}`
+      );
+    }
+
     const data = await response.json();
 
     if (data.success) {
       allMetrics = data.metrics;
-      displayMetrics(allMetrics);
+      displayMetrics(allMetrics, false); // Don't preserve on initial load
     } else {
-      throw new Error("Failed to load metrics");
+      throw new Error(data.error || "Failed to load metrics");
     }
   } catch (error) {
-    container.innerHTML = `<div style="color: #d32f2f; text-align: center; padding: 20px;">
-            ❌ Error loading metrics: ${error.message}
-        </div>`;
+    console.error("Error loading metrics:", error);
+    container.innerHTML = `
+      <div style="color: #f5222d; text-align: center; padding: 40px 20px;">
+        <div style="font-size: 2rem; margin-bottom: 8px;">✗</div>
+        <div style="font-weight: 500; margin-bottom: 4px;">Failed to load metrics</div>
+        <div style="font-size: 0.8125rem; color: #9fa2a7;">${error.message}</div>
+      </div>
+    `;
   }
 }
 
-function displayMetrics(metrics) {
+function displayMetrics(metrics, preserveSelection = false) {
   const container = document.getElementById("metrics-container");
 
   if (metrics.length === 0) {
     container.innerHTML =
       '<div style="text-align: center; color: #999; padding: 20px;">No metrics found</div>';
     return;
+  }
+
+  // Get currently selected metrics if preserving selection
+  let selectedMetrics = [];
+  if (preserveSelection) {
+    selectedMetrics = getSelectedMetrics();
   }
 
   const html = `
@@ -61,14 +82,21 @@ function displayMetrics(metrics) {
             <button class="select-all-btn" onclick="toggleSelectAll()">Select All</button>
         </div>
         ${metrics
-          .map(
-            (metric, index) => `
+          .map((metric, index) => {
+            // Check if this metric should be selected
+            const isChecked = preserveSelection
+              ? selectedMetrics.includes(metric)
+              : true; // Default to checked on initial load
+
+            return `
             <div class="metric-item">
-                <input type="checkbox" id="metric-${index}" value="${metric}" class="metric-checkbox" checked>
+                <input type="checkbox" id="metric-${index}" value="${metric}" class="metric-checkbox" ${
+              isChecked ? "checked" : ""
+            }>
                 <label for="metric-${index}">${metric}</label>
             </div>
-        `
-          )
+              `;
+          })
           .join("")}
     `;
 
@@ -82,7 +110,7 @@ function filterMetrics() {
   const filteredMetrics = allMetrics.filter((metric) =>
     metric.toLowerCase().includes(searchTerm)
   );
-  displayMetrics(filteredMetrics);
+  displayMetrics(filteredMetrics, true); // Preserve selection state
 }
 
 function toggleSelectAll() {
@@ -103,7 +131,7 @@ async function exportMetrics() {
   const outputPath = document.getElementById("output-path").value.trim();
 
   if (!outputPath) {
-    showAlert("export-alert", "Please provide an output file path", "error");
+    showAlert("export-alert", "✗ Output file path is required", "error");
     return;
   }
 
@@ -113,7 +141,7 @@ async function exportMetrics() {
   if (selectedMetrics.length === 0) {
     showAlert(
       "export-alert",
-      "Please select at least one metric to export",
+      "✗ At least one metric must be selected",
       "error"
     );
     return;
@@ -140,17 +168,24 @@ async function exportMetrics() {
 
     const data = await response.json();
 
+    if (!response.ok) {
+      throw new Error(
+        data.error || `HTTP ${response.status}: ${response.statusText}`
+      );
+    }
+
     if (data.success) {
       showAlert(
         "export-alert",
-        `${data.message}\nFile saved to: ${data.outputPath}`,
+        `${data.message}\nFile: ${data.outputPath}`,
         "success"
       );
     } else {
       throw new Error(data.error || "Export failed");
     }
   } catch (error) {
-    showAlert("export-alert", `Export failed: ${error.message}`, "error");
+    console.error("Export error:", error);
+    showAlert("export-alert", `✗ Export failed: ${error.message}`, "error");
   }
 }
 
@@ -158,7 +193,7 @@ async function importMetrics() {
   const inputPath = document.getElementById("input-path").value.trim();
 
   if (!inputPath) {
-    showAlert("import-alert", "Please provide an input file path", "error");
+    showAlert("import-alert", "✗ Input file path is required", "error");
     return;
   }
 
@@ -173,18 +208,21 @@ async function importMetrics() {
 
     const data = await response.json();
 
-    if (data.success) {
-      showAlert(
-        "import-alert",
-        `${data.message}\nMetrics have been imported successfully.`,
-        "success"
+    if (!response.ok) {
+      throw new Error(
+        data.error || `HTTP ${response.status}: ${response.statusText}`
       );
+    }
+
+    if (data.success) {
+      showAlert("import-alert", data.message, "success");
       document.getElementById("input-path").value = "";
     } else {
       throw new Error(data.error || "Import failed");
     }
   } catch (error) {
-    showAlert("import-alert", `Import failed: ${error.message}`, "error");
+    console.error("Import error:", error);
+    showAlert("import-alert", `✗ Import failed: ${error.message}`, "error");
   }
 }
 

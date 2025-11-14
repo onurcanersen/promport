@@ -18,8 +18,26 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/api/metrics", async (req, res) => {
   try {
+    if (!PROMTOOL_PATH) {
+      return res.status(500).json({
+        success: false,
+        error: "PROMTOOL_PATH environment variable is not configured",
+      });
+    }
+
+    if (!PROMETHEUS_URL) {
+      return res.status(500).json({
+        success: false,
+        error: "PROMETHEUS_URL environment variable is not configured",
+      });
+    }
+
     const command = `"${PROMTOOL_PATH}" query labels ${PROMETHEUS_URL} __name__`;
-    const { stdout } = await execAsync(command);
+    const { stdout, stderr } = await execAsync(command);
+
+    if (stderr && !stdout) {
+      throw new Error(stderr);
+    }
 
     const metrics = stdout
       .split("\n")
@@ -41,21 +59,52 @@ app.get("/api/metrics", async (req, res) => {
       metrics,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Error fetching metrics:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to fetch metrics from Prometheus",
+    });
   }
 });
 
 app.post("/api/export", async (req, res) => {
   const { minTime, maxTime, selectedMetrics, outputPath } = req.body;
 
+  // Validation
   if (!outputPath) {
-    return res.status(400).json({ error: "Output path is required" });
+    return res.status(400).json({
+      success: false,
+      error: "Output file path is required",
+    });
   }
 
   if (!selectedMetrics || selectedMetrics.length === 0) {
-    return res
-      .status(400)
-      .json({ error: "At least one metric must be selected" });
+    return res.status(400).json({
+      success: false,
+      error: "At least one metric must be selected",
+    });
+  }
+
+  if (!PROMTOOL_PATH) {
+    return res.status(500).json({
+      success: false,
+      error: "PROMTOOL_PATH environment variable is not configured",
+    });
+  }
+
+  if (!TSDB_PATH) {
+    return res.status(500).json({
+      success: false,
+      error: "TSDB_PATH environment variable is not configured",
+    });
+  }
+
+  // Validate time range
+  if (minTime && maxTime && minTime > maxTime) {
+    return res.status(400).json({
+      success: false,
+      error: "Start time must be before end time",
+    });
   }
 
   try {
@@ -74,38 +123,132 @@ app.post("/api/export", async (req, res) => {
 
     command += ` "${TSDB_PATH}" > "${outputPath}"`;
 
-    await execAsync(command, { maxBuffer: 1024 * 1024 * 100 });
+    const { stderr } = await execAsync(command, {
+      maxBuffer: 1024 * 1024 * 100,
+    });
+
+    if (stderr) {
+      console.warn("Export stderr:", stderr);
+    }
 
     res.json({
       success: true,
-      message: `✓ Export completed successfully - ${selectedMetrics.length} metric(s) exported`,
+      message: `✓ Successfully exported ${selectedMetrics.length} metric(s)`,
       outputPath,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Export error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to export metrics",
+    });
   }
 });
 
 app.post("/api/import", async (req, res) => {
   const { inputPath } = req.body;
 
+  // Validation
   if (!inputPath) {
-    return res.status(400).json({ error: "Input path is required" });
+    return res.status(400).json({
+      success: false,
+      error: "Input file path is required",
+    });
+  }
+
+  if (!PROMTOOL_PATH) {
+    return res.status(500).json({
+      success: false,
+      error: "PROMTOOL_PATH environment variable is not configured",
+    });
+  }
+
+  if (!TSDB_PATH) {
+    return res.status(500).json({
+      success: false,
+      error: "TSDB_PATH environment variable is not configured",
+    });
   }
 
   try {
     const command = `"${PROMTOOL_PATH}" tsdb create-blocks-from openmetrics "${inputPath}" "${TSDB_PATH}"`;
-    await execAsync(command, { maxBuffer: 1024 * 1024 * 100 });
+    const { stderr } = await execAsync(command, {
+      maxBuffer: 1024 * 1024 * 100,
+    });
+
+    if (stderr) {
+      console.warn("Import stderr:", stderr);
+    }
 
     res.json({
       success: true,
-      message: "✓ Import completed successfully",
+      message: "✓ Successfully imported metrics",
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Import error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to import metrics",
+    });
   }
 });
 
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({
+    success: false,
+    error: err.message || "Internal server error",
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: "Endpoint not found",
+  });
+});
+
+// Validate configuration on startup
+function validateConfig() {
+  const errors = [];
+
+  if (!PROMTOOL_PATH) {
+    errors.push("PROMTOOL_PATH environment variable is not configured");
+  }
+
+  if (!TSDB_PATH) {
+    errors.push("TSDB_PATH environment variable is not configured");
+  }
+
+  if (errors.length > 0) {
+    console.error("✗ Configuration errors:");
+    errors.forEach((err) => console.error(`  - ${err}`));
+    console.error(
+      "\nPlease configure the required environment variables in your .env file"
+    );
+    return false;
+  }
+
+  return true;
+}
+
 app.listen(PORT, () => {
-  console.log(`PromPort running on http://localhost:${PORT}`);
+  console.log("\n" + "=".repeat(50));
+  console.log("PromPort - Prometheus Export/Import Tool");
+  console.log("=".repeat(50));
+
+  if (validateConfig()) {
+    console.log("✓ Configuration validated successfully");
+    console.log(`✓ Server is running on http://localhost:${PORT}`);
+    console.log(`✓ Prometheus URL: ${PROMETHEUS_URL}`);
+    console.log(`✓ TSDB path: ${TSDB_PATH}`);
+  } else {
+    console.log("⚠ Server started with configuration errors");
+    console.log(`⚠ Server is running on http://localhost:${PORT}`);
+    console.log("⚠ Some features may not function correctly");
+  }
+
+  console.log("=".repeat(50) + "\n");
 });
