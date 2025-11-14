@@ -52,6 +52,12 @@ app.post("/api/export", async (req, res) => {
     return res.status(400).json({ error: "Output path is required" });
   }
 
+  if (!selectedMetrics || selectedMetrics.length === 0) {
+    return res
+      .status(400)
+      .json({ error: "At least one metric must be selected" });
+  }
+
   try {
     let command = `"${PROMTOOL_PATH}" tsdb dump-openmetrics`;
 
@@ -63,10 +69,8 @@ app.post("/api/export", async (req, res) => {
       command += ` --max-time=${maxTime}`;
     }
 
-    if (selectedMetrics && selectedMetrics.length > 0) {
-      const matchPattern = selectedMetrics.join("|");
-      command += ` --match '{__name__=~"${matchPattern}"}'`;
-    }
+    const matchPattern = selectedMetrics.join("|");
+    command += ` --match '{__name__=~"${matchPattern}"}'`;
 
     command += ` "${TSDB_PATH}" > "${outputPath}"`;
 

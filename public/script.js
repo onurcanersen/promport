@@ -64,7 +64,7 @@ function displayMetrics(metrics) {
           .map(
             (metric, index) => `
             <div class="metric-item">
-                <input type="checkbox" id="metric-${index}" value="${metric}" class="metric-checkbox">
+                <input type="checkbox" id="metric-${index}" value="${metric}" class="metric-checkbox" checked>
                 <label for="metric-${index}">${metric}</label>
             </div>
         `
@@ -108,12 +108,23 @@ async function exportMetrics() {
   }
 
   const selectedMetrics = getSelectedMetrics();
+
+  // Validate that at least one metric is selected
+  if (selectedMetrics.length === 0) {
+    showAlert(
+      "export-alert",
+      "Please select at least one metric to export",
+      "error"
+    );
+    return;
+  }
+
   const minTime = document.getElementById("min-time").value;
   const maxTime = document.getElementById("max-time").value;
 
   const payload = {
     outputPath,
-    selectedMetrics: selectedMetrics.length > 0 ? selectedMetrics : undefined,
+    selectedMetrics,
     minTime: minTime ? new Date(minTime).getTime() : undefined,
     maxTime: maxTime ? new Date(maxTime).getTime() : undefined,
   };
